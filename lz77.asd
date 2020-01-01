@@ -7,4 +7,5 @@
   :components
   ((:module "src"
     :components ((:file "package")
-                 (:file "lz77-encoder" :depends-on ("package"))))))
+                 (:file "lz77-encoder" :depends-on ("package"))
+                 (:file "lz77-decoder" :depends-on ("package"))))))

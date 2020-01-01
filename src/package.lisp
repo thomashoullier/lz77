@@ -1,4 +1,4 @@
 (defpackage :lz77
   (:documentation "LZ77 compression encoder/decoder for deflate.")
   (:use :cl)
-  (:export ))
+  (:export #:make-lz77-decoder))
