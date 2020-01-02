@@ -9,3 +9,7 @@
   #(#(3 4 1) #(4 1 7)))
 (defparameter *valid-decoded*
   #(0 0 0 0 5 48 34 34 34 34 34 32 32 7))
+
+(defparameter *decoded*
+  (lz77:decode *lz77-decoder* *literals* *length-distance-position*))
+(format t "~&~A~%" *decoded*)
