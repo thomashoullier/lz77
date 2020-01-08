@@ -13,3 +13,6 @@
 (defparameter *decoded*
   (lz77:decode *lz77-decoder* *literals* *length-distance-position*))
 (format t "~&~A~%" *decoded*)
+
+;;; Encoder
+(defparameter *lz77-encoder* (lz77:make-lz77-encoder))
