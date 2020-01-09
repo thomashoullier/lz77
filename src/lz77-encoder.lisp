@@ -95,10 +95,6 @@ uncompressed: The whole uncompressed array to encode."
   "Inserts a new hash for the current string at index p-global, updating the prev
 and head tables.
 h1: The computed hash for the current string."
-  ;; TODO: * How do we pad the end of the string when we reach the end of the
-  ;;       array to encode?
-  ;;       => Actually very simple: do not pad and don't add hashes for p above
-  ;;          total length - min-string-len.
   (with-slots ((p-global p-global)
                (head head)
                (prev prev)
@@ -112,18 +108,14 @@ h1: The computed hash for the current string."
 uncompressed: The whole uncompressed array to encode.
 p-match: The index into uncompressed of the match that was found.
 Returns the match length."
-  ;; TODO: * This is bugged. We can have the same hash corresponding to
-  ;;         different sequences of symbols. So we need to check ALL the
-  ;;         symbols in the strings, and not skip the first ones.
-  ;;         match-length must begin at zero.
   ;; Note that two different strings can be hashed to the same hash.
   ;; So we need to check all the symbols in the strings, and not just
   ;; those that come after min-string-len.
   (with-slots ((p-global p-global)) encoder
     (let ((match-length 0))
-      ;; We move two pointers over both the current string and the matching
-      ;; string, from the first symbol after the known matches until we either
-      ;; find something that doesn't match or reach the end of uncompressed.
+      ;; We move two pointers over both the current string and the
+      ;; matching string until we either find something that doesn't
+      ;; match or reach the end of uncompressed.
       (loop for p-current from p-global
               below (length uncompressed)
             for p-onmatch from p-match
@@ -180,7 +172,8 @@ length-distance-position triplets."
   (with-slots ((last-window last-window)
                (window-size window-size)
                (p-global p-global)
-               (min-string-len min-string-len)) encoder
+               (min-string-len min-string-len)
+               (max-string-len max-string-len)) encoder
     (let ((to-compress (make-array (+ (length uncompressed) window-size)
                                    :element-type 'fixnum))
           ;; The size is at most that of the array to compress so just
@@ -189,7 +182,11 @@ length-distance-position triplets."
           ;; Adjustable vector.
           (triplets (make-array 0 :fill-pointer 0
                                   :element-type '(simple-array fixnum (3))))
-          (h1 0))
+          (h1 0)
+          ;; [list p-longest-match max-length] or nil if no match was found.
+          (longest-match)
+          ;; position into literals for write operations.
+          (p-literals -1))
       ;; Prepend the last sliding window to the array to compress.
       (replace to-compress last-window)
       ;; Recopy the values to compress.
@@ -203,8 +200,54 @@ length-distance-position triplets."
                (setf h1 (string-hash encoder to-compress))
                (add-hash encoder h1)
                (incf p-global))
+      (setf p-global window-size)
       ;; Main encoding loop
-
+      (loop while (<= p-global (- (length to-compress) min-string-len)) do
+        ;; Compute the hash for the current string.
+        (setf h1 (string-hash encoder to-compress))
+        ;; Find the longest matching string in the sliding window, if any.
+        (setf longest-match (find-longest-match encoder to-compress h1))
+        (if (or (not longest-match)
+                (< (cadr longest-match) min-string-len))
+            ;; Either:
+            ;;   * No match was found.
+            ;;   * Longest match is below the inferior length limit.
+            ;; We can encode the current symbol as a literal.
+            (progn
+              (setf (aref literals (incf p-literals))
+                    (aref to-compress p-global))
+              (add-hash encoder h1)
+              (incf p-global))
+            ;; Else match length is above inferior limit, we can encode as
+            ;; triplet
+            (progn
+              ;; Write the compressed triplet.
+              ;; We cap the length by max-string-len
+              (setf (cadr longest-match)
+                    (min (cadr longest-match) max-string-len))
+              (vector-push-extend
+               (make-array
+                3 :element-type 'fixnum :initial-contents
+                (list ;; length
+                 (cadr longest-match)
+                 ;; distance
+                 (- p-global (car longest-match))
+                 ;; Current position in uncompressed data, without the sliding
+                 ;; window.
+                 (- p-global window-size)))
+               triplets)
+              ;; We must add `length` hashes.
+              (add-hash encoder h1) (incf p-global)
+              (dotimes (it (1- (cadr longest-match)))
+                (setf h1 (string-hash encoder to-compress))
+                (add-hash encoder h1) (incf p-global)))))
+      ;; Encode the eventual last few symbols as literals.
+      (loop while (< p-global (length to-compress)) do
+        (setf (aref literals (incf p-literals)) (aref to-compress p-global))
+        (incf p-global))
+      ;; p-literals ends right on the character that was just written.
+      ;; Resize literals to match the actual number of elements in it.
+      (setf literals (subseq literals 0 (1+ p-literals)))
       ;; Save the state of the last sliding window.
       (setf last-window
             (subseq to-compress (- (length to-compress) window-size)))

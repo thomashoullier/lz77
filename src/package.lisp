@@ -3,4 +3,5 @@
   (:use :cl)
   (:export #:make-lz77-decoder
            #:decode
-           #:make-lz77-encoder))
+           #:make-lz77-encoder
+           #:encode))

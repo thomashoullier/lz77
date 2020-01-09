@@ -16,3 +16,14 @@
 
 ;;; Encoder
 (defparameter *lz77-encoder* (lz77:make-lz77-encoder))
+(defparameter *to-encode*
+  #(0 0 0 0 4 3 2 5 4 3 2 1 5 1 5 2 3))
+(defparameter *valid-literals*
+  #(4 3 2 5 1 5 1 5 2 3))
+(defparameter *valid-triplets*
+  #(#(4 1 0) #(3 4 8)))
+(defparameter *literals* nil)
+(defparameter *triplets* nil)
+(setf (values *literals* *triplets*)
+      (values-list (lz77:encode *lz77-encoder* *to-encode*)))
+(format t "~&literals: ~A~% triplets: ~A~%" *literals* *triplets*)
