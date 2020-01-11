@@ -16,6 +16,9 @@
     (make-instance 'lz77-decoder :window-size window-size
                                  :last-window last-window)))
 
+;; TODO: * Add the ability to decode in multiple parts. Should be OK
+;;         already but test.
+
 (defmethod decode ((decoder lz77-decoder) literals triplets)
   "Decode LZ77-compressed data.
 literals: An array of literal integers that were not compressed by LZ77.

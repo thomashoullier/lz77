@@ -43,13 +43,24 @@ matches for a given hash."
     "Pointer into the global initial-window + uncompressed data array. The zero
 is the beginning of the initial sliding window of all zeroes. Then p-global
 iterates ad infinitum as long as uncompressed data is provided to the encoding
-method, in one array or multiple ones."
-    :accessor p-global :initarg :p-global)))
+method, in one array or multiple ones. Used to access the hash tables. Points to
+the next index to hash."
+    :accessor p-global :initarg :p-global)
+   (p-run
+    :documentation
+    "Pointer into the initial-window + uncompressed data array for a given run.
+Is reset at the beginning of every encoding run. Used to access the data to
+encode."
+    :accessor p-run :initarg :p-run)
+   (p-global-begin-run
+    :documentation
+    "Pointer into the global initial-window + uncompressed data array.
+Keeps track of the value of [p-global + min-string-len -1] at the
+beginning of the run. Should point to the beginning of next actual data
+to encode in the following run."
+    :accessor p-global-begin-run :initarg :p-global-begin-run)))
 
-;; TODO: * We have not adapted most of this to encoding multiple arrays.
-;;         we have just put the structure necessary to do it, the actual
-;;         adjustments are still to implement. We first implement a working
-;;         version for just one array.
+;; TODO: * Simplify the counters mechanism for encoding in multiple parts.
 
 (defun make-lz77-encoder (&key ((:window-size window-size) 32768)
                             ((:min-string-len min-string-len) 3)
@@ -58,6 +69,8 @@ method, in one array or multiple ones."
   (let ((head (make-array hsiz :element-type 'fixnum :initial-element -1))
         (prev (make-array window-size :element-type 'fixnum))
         (p-global 0)
+        (p-run 0)
+        (p-global-begin-run window-size)
         (last-window (make-array window-size :element-type 'fixnum
                                              :initial-element 0))
         (h1 0)
@@ -67,33 +80,35 @@ method, in one array or multiple ones."
                          :window-size window-size :last-window last-window
                          :min-string-len min-string-len
                          :max-string-len max-string-len :head head :prev prev
-                         :p-global p-global))
+                         :p-global p-global :p-run p-run
+                         :p-global-begin-run p-global-begin-run))
     ;; Initialize head and prev tables.
     ;; TODO: * Replace with a fixed initialization, since we know there are only
     ;;         zeroes in the initial window.
     (with-slots ((p-global p-global)
+                 (p-run p-run)
                  (last-window last-window)) encoder
-      (loop while (<= p-global (- window-size min-string-len)) do
+      (loop while (<= p-run (- window-size min-string-len)) do
         (setf h1 (string-hash encoder last-window))
         (add-hash encoder h1)
-        (incf p-global)))
+        (incf p-global) (incf p-run)))
     encoder))
 
 (defmethod string-hash ((encoder lz77-encoder) uncompressed)
   "Hashes strings of min-string-len length.
 uncompressed: The whole uncompressed array to encode."
   (with-slots ((min-string-len min-string-len)
-               (p-global p-global)) encoder
+               (p-run p-run)) encoder
     (let ((h1 0))
       (dotimes (i min-string-len)
-        (setf h1 (logand (logxor (aref uncompressed (+ p-global i))
+        (setf h1 (logand (logxor (aref uncompressed (+ p-run i))
                                  (ash h1 d-param))
                          (1- hsiz))))
       h1)))
 
 (defmethod add-hash ((encoder lz77-encoder) h1)
-  "Inserts a new hash for the current string at index p-global, updating the prev
-and head tables.
+  "Inserts a new hash for the current string at index p-global,
+updating the prev and head tables.
 h1: The computed hash for the current string."
   (with-slots ((p-global p-global)
                (head head)
@@ -111,12 +126,12 @@ Returns the match length."
   ;; Note that two different strings can be hashed to the same hash.
   ;; So we need to check all the symbols in the strings, and not just
   ;; those that come after min-string-len.
-  (with-slots ((p-global p-global)) encoder
+  (with-slots ((p-run p-run)) encoder
     (let ((match-length 0))
       ;; We move two pointers over both the current string and the
       ;; matching string until we either find something that doesn't
       ;; match or reach the end of uncompressed.
-      (loop for p-current from p-global
+      (loop for p-current from p-run
               below (length uncompressed)
             for p-onmatch from p-match
             while (= (aref uncompressed p-current)
@@ -139,7 +154,8 @@ otherwise."
   (with-slots ((p-global p-global)
                (head head)
                (prev prev)
-               (window-size window-size)) encoder
+               (window-size window-size)
+               (p-global-begin-run p-global-begin-run)) encoder
     (let ((first-match (aref head h1))
           (next-match 0)
           ;; Maximum length found among all matches.
@@ -151,12 +167,19 @@ otherwise."
       (when (< first-match (- p-global window-size))
         (return-from find-longest-match nil))
       ;; Compute the length for the first match.
-      (psetf max-length (compute-match-length encoder uncompressed first-match)
+      (psetf max-length
+             (compute-match-length
+              encoder uncompressed
+              ;; Convert to index for current run.
+              (- (+ first-match window-size) p-global-begin-run))
              p-longest-match first-match)
       ;; Compute the length of all previous matches until we run out.
       (setf next-match (aref prev (logand next-match (1- window-size))))
       (loop while (>= next-match (- p-global window-size)) do
-        (setf new-length (compute-match-length encoder uncompressed next-match))
+        (setf new-length
+              (compute-match-length
+               encoder uncompressed
+               (- (+ next-match window-size) p-global-begin-run)))
         (when (> new-length max-length)
           (psetf max-length new-length
                  p-longest-match next-match))
@@ -172,6 +195,8 @@ length-distance-position triplets."
   (with-slots ((last-window last-window)
                (window-size window-size)
                (p-global p-global)
+               (p-global-begin-run p-global-begin-run)
+               (p-run p-run)
                (min-string-len min-string-len)
                (max-string-len max-string-len)) encoder
     (let ((to-compress (make-array (+ (length uncompressed) window-size)
@@ -187,22 +212,28 @@ length-distance-position triplets."
           (longest-match)
           ;; position into literals for write operations.
           (p-literals -1))
+      ;; Re-init the p-run. We start at the first few hashes to add.
+      (setf p-run (1+ (- window-size min-string-len)))
       ;; Prepend the last sliding window to the array to compress.
       (replace to-compress last-window)
       ;; Recopy the values to compress.
       (replace to-compress uncompressed :start1 window-size)
       ;; Compute the hashes for the last min-string-len? symbols of the sliding
       ;; window, they could not be computed in the previous encoding run.
-      ;; The p-global starts on the first symbol that could not be computed.
-      (loop while (and (< p-global window-size)
-                       (<= (+ p-global min-string-len) (length to-compress)))
+      ;; The p-global and p-run start on the first symbol that could
+      ;; not be computed previously.
+      (loop while (and (< p-run window-size)
+                       (<= (+ p-run min-string-len) (length to-compress)))
             do
                (setf h1 (string-hash encoder to-compress))
                (add-hash encoder h1)
-               (incf p-global))
-      (setf p-global window-size)
+               (incf p-run) (incf p-global))
+      ;; In case min-string-len is really long, we need to set the pointers
+      ;; at the beginning of the data to encode. The main loop will be skipped.
+      (setf p-global (+ p-global (- window-size p-run))
+            p-run window-size)
       ;; Main encoding loop
-      (loop while (<= p-global (- (length to-compress) min-string-len)) do
+      (loop while (<= p-run (- (length to-compress) min-string-len)) do
         ;; Compute the hash for the current string.
         (setf h1 (string-hash encoder to-compress))
         ;; Find the longest matching string in the sliding window, if any.
@@ -215,9 +246,9 @@ length-distance-position triplets."
             ;; We can encode the current symbol as a literal.
             (progn
               (setf (aref literals (incf p-literals))
-                    (aref to-compress p-global))
+                    (aref to-compress p-run))
               (add-hash encoder h1)
-              (incf p-global))
+              (incf p-global) (incf p-run))
             ;; Else match length is above inferior limit, we can encode as
             ;; triplet
             (progn
@@ -233,23 +264,27 @@ length-distance-position triplets."
                  ;; distance
                  (- p-global (car longest-match))
                  ;; Current position in uncompressed data, without the sliding
-                 ;; window.
-                 (- p-global window-size)))
+                 ;; window. Position in the current encoding run, not globally.
+                 (- p-run window-size)))
                triplets)
               ;; We must add `length` hashes.
-              (add-hash encoder h1) (incf p-global)
+              (add-hash encoder h1) (incf p-global) (incf p-run)
               (dotimes (it (1- (cadr longest-match)))
-                (setf h1 (string-hash encoder to-compress))
-                (add-hash encoder h1) (incf p-global)))))
+                (when (<= p-run (- (length to-compress) min-string-len))
+                  (setf h1 (string-hash encoder to-compress))
+                  (add-hash encoder h1))
+                (incf p-global) (incf p-run)))))
       ;; Encode the eventual last few symbols as literals.
-      (loop while (< p-global (length to-compress)) do
-        (setf (aref literals (incf p-literals)) (aref to-compress p-global))
-        (incf p-global))
+      (loop while (< p-run (length to-compress)) do
+        (setf (aref literals (incf p-literals)) (aref to-compress p-run))
+        (incf p-run))
       ;; p-literals ends right on the character that was just written.
       ;; Resize literals to match the actual number of elements in it.
       (setf literals (subseq literals 0 (1+ p-literals)))
       ;; Save the state of the last sliding window.
       (setf last-window
             (subseq to-compress (- (length to-compress) window-size)))
+      ;; Save the value of p-global for the next run
+      (setf p-global-begin-run (1- (+ min-string-len p-global)))
       ;; Return encoded results.
       (list literals triplets))))
