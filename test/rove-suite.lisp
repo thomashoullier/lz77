@@ -9,6 +9,8 @@
 ;;;   * Add more tests for edge cases, eg. very few inputs and no inputs.
 ;;;     * Encoding only zeroes.
 ;;;   * Write test helpers to compacify tests a bit.
+;;;     * For decoder.
+;;;   * Consider splitting test in multiple files.
 
 ;;; Decoder
 (deftest decoder
@@ -44,137 +46,54 @@
       (setf decoded (decode lz77-decoder literals triplets))
       (ok (equalp decoded valid-decoded) (format nil "decoded: ~A" decoded)))))
 
+;;; Encoder helper functions
+(defun test-encoder (test-namestring to-encode-l valid-literals-l
+                     valid-triplets-l)
+  "Instantiate a new lz77 encoder and validate the output against provided
+reference literals and triplets.
+test-namestring: Name for the test.
+to-encode-l: List of arrays of symbols to encode.
+valid-literals-l: List of arrays of literals for validation.
+valid-triplets-l: List of arrays of triplets for validation."
+  (let ((lz77-encoder (make-lz77-encoder))
+        (literals) (triplets))
+    (testing (concatenate 'string test-namestring
+                          (format nil "~%~A" to-encode-l))
+      (loop for i-part from 1
+            for to-encode in to-encode-l
+            for valid-literals in valid-literals-l
+            for valid-triplets in valid-triplets-l do
+              (multiple-value-setq (literals triplets)
+                (values-list (encode lz77-encoder to-encode)))
+              (ok (and (equalp literals valid-literals)
+                       (equalp triplets valid-triplets))
+                  (format nil "Part #~A: literals: ~A triplets: ~A"
+                          i-part literals triplets))))))
+
 ;;; Encoder
 (deftest encoder
   ;; Case 1
-  (let ((lz77-encoder)
-        (to-encode #(0 0 0 0 4 3 2 5 4 3 2 1 5 1 5 2 3))
-        (literals)
-        (valid-literals #(4 3 2 5 1 5 1 5 2 3))
-        (triplets)
-        (valid-triplets #(#(4 1 0) #(3 4 8))))
-    (testing (format nil "case 1 ~A" to-encode)
-      (setf lz77-encoder (make-lz77-encoder))
-      (pass "LZ77 encoder instantiated.")
-      (multiple-value-setq (literals triplets)
-        (values-list (encode lz77-encoder to-encode)))
-      (ok (and (equalp literals valid-literals)
-               (equalp triplets valid-triplets))
-          (format nil "literals: ~A triplets: ~A" literals triplets))))
+  (test-encoder "case 1" '(#(0 0 0 0 4 3 2 5 4 3 2 1 5 1 5 2 3))
+                '(#(4 3 2 5 1 5 1 5 2 3)) '(#(#(4 1 0) #(3 4 8))))
   ;; Case 2
-  (let ((lz77-encoder (make-lz77-encoder))
-        (to-encode #(4 3 2 5 4 3 2 1 5 1 5 2 3))
-        (literals)
-        (valid-literals #(4 3 2 5 1 5 1 5 2 3))
-        (triplets)
-        (valid-triplets #(#(3 4 4))))
-    (testing (format nil "case 2 ~A" to-encode)
-      (multiple-value-setq (literals triplets)
-        (values-list (encode lz77-encoder to-encode)))
-      (ok (and (equalp literals valid-literals)
-               (equalp triplets valid-triplets))
-          (format nil "literals: ~A triplets: ~A" literals triplets))))
+  (test-encoder "case 2" '(#(4 3 2 5 4 3 2 1 5 1 5 2 3))
+                '(#(4 3 2 5 1 5 1 5 2 3)) '(#(#(3 4 4))))
   ;; Case 3: Three parts.
-  (let ((lz77-encoder (make-lz77-encoder))
-        (to-encode-1 #(0 0 0 4 5 3 5 6 4 5 3 1 2 0 9 4)) ; 16 elements
-        (to-encode-2 #(0 0 0 5 6 4 5 3 0 4 7 7))
-        (to-encode-3 #(0 1 2 3 0 5 6))
-        (literals-1) (literals-2) (triplets-1) (triplets-2)
-        (literals-3) (triplets-3)
-        (valid-literals-1 #(4 5 3 5 6 1 2 0 9 4))
-        (valid-triplets-1 #(#(3 1 0) #(3 5 8)))
-        (valid-literals-2 #(0 4 7 7))
-        (valid-triplets-2 #(#(3 16 0) #(5 13 3)))
-        (valid-literals-3 #(0 1 2 3))
-        (valid-triplets-3 #(#(3 14 4))))
-    (testing (format nil "case 3: three parts ~%~A ~A ~A"
-                     to-encode-1 to-encode-2 to-encode-3)
-      (loop for i-part from 1
-            for to-encode in (list to-encode-1 to-encode-2 to-encode-3)
-            for literals in (list literals-1 literals-2 literals-3)
-            for triplets in (list triplets-1 triplets-2 triplets-3)
-            for valid-literals
-              in (list valid-literals-1 valid-literals-2 valid-literals-3)
-            for valid-triplets
-              in (list valid-triplets-1 valid-triplets-2 valid-triplets-3) do
-                (multiple-value-setq (literals triplets)
-                  (values-list (encode lz77-encoder to-encode)))
-                (ok (and (equalp literals valid-literals)
-                         (equalp triplets valid-triplets))
-                    (format nil "Part #~A: literals: ~A triplets: ~A"
-                            i-part literals triplets)))))
+  (test-encoder "case 3"
+                '(#(0 0 0 4 5 3 5 6 4 5 3 1 2 0 9 4)
+                  #(0 0 0 5 6 4 5 3 0 4 7 7)
+                  #(0 1 2 3 0 5 6))
+                '(#(4 5 3 5 6 1 2 0 9 4) #(0 4 7 7) #(0 1 2 3))
+                '(#(#(3 1 0) #(3 5 8)) #(#(3 16 0) #(5 13 3)) #(#(3 14 4))))
   ;; Edge case 1: 1 symbol at a time or no symbols:
-  (let ((lz77-encoder (make-lz77-encoder))
-        (to-encode-1 #(0))
-        (to-encode-2 #())
-        (to-encode-3 #(2))
-        (literals-1) (literals-2) (triplets-1) (triplets-2)
-        (literals-3) (triplets-3)
-        (valid-literals-1 #(0))
-        (valid-triplets-1 #())
-        (valid-literals-2 #())
-        (valid-triplets-2 #())
-        (valid-literals-3 #(2))
-        (valid-triplets-3 #()))
-    (testing (format nil "edge-case 1: three parts of 1 symbol or no symbol~@
-                          ~A ~A ~A"
-                     to-encode-1 to-encode-2 to-encode-3)
-      (loop for i-part from 1
-            for to-encode in (list to-encode-1 to-encode-2 to-encode-3)
-            for literals in (list literals-1 literals-2 literals-3)
-            for triplets in (list triplets-1 triplets-2 triplets-3)
-            for valid-literals
-              in (list valid-literals-1 valid-literals-2 valid-literals-3)
-            for valid-triplets
-              in (list valid-triplets-1 valid-triplets-2 valid-triplets-3) do
-                (multiple-value-setq (literals triplets)
-                  (values-list (encode lz77-encoder to-encode)))
-                (ok (and (equalp literals valid-literals)
-                         (equalp triplets valid-triplets))
-                    (format nil "Part #~A: literals: ~A triplets: ~A"
-                            i-part literals triplets)))))
+  (test-encoder "edge-case 1: three parts of 1 symbol or no symbol"
+                '(#(0) #() #(2)) '(#(0) #() #(2)) '(#() #() #()))
   ;; Edge case 2: Begin with empty data:
-  (let ((lz77-encoder (make-lz77-encoder))
-        (to-encode-1 #())
-        (to-encode-2 #())
-        (to-encode-3 #(4))
-        (literals-1) (literals-2) (triplets-1) (triplets-2)
-        (literals-3) (triplets-3)
-        (valid-literals-1 #())
-        (valid-triplets-1 #())
-        (valid-literals-2 #())
-        (valid-triplets-2 #())
-        (valid-literals-3 #(4))
-        (valid-triplets-3 #()))
-    (testing (format nil "edge-case 2: Begin with empty data~%~A ~A ~A"
-                     to-encode-1 to-encode-2 to-encode-3)
-      (loop for i-part from 1
-            for to-encode in (list to-encode-1 to-encode-2 to-encode-3)
-            for literals in (list literals-1 literals-2 literals-3)
-            for triplets in (list triplets-1 triplets-2 triplets-3)
-            for valid-literals
-              in (list valid-literals-1 valid-literals-2 valid-literals-3)
-            for valid-triplets
-              in (list valid-triplets-1 valid-triplets-2 valid-triplets-3) do
-                (multiple-value-setq (literals triplets)
-                  (values-list (encode lz77-encoder to-encode)))
-                (ok (and (equalp literals valid-literals)
-                         (equalp triplets valid-triplets))
-                    (format nil "Part #~A: literals: ~A triplets: ~A"
-                            i-part literals triplets))))))
+  (test-encoder "edge-case 2: begin with empty data"
+                '(#() #() #(4)) '(#() #() #(4)) '(#() #() #())))
 
 ;;; Fixed bugs.
 (deftest fixed-bugs
   ;; bug-1: Encoding a triplet at the very end of the uncompressed data.
-  (let ((lz77-encoder (make-lz77-encoder))
-        (to-encode #(1 2 3 4 2 3 4))
-        (literals)
-        (valid-literals #(1 2 3 4))
-        (triplets)
-        (valid-triplets #(#(3 3 4))))
-    (testing (format nil "bug-1: End triplet ~A" to-encode)
-      (multiple-value-setq (literals triplets)
-        (values-list (encode lz77-encoder to-encode)))
-      (ok (and (equalp literals valid-literals)
-               (equalp triplets valid-triplets))
-          (format nil "literals: ~A triplets: ~A" literals triplets)))))
+  (test-encoder "bug-1: end triplet"
+                '(#(1 2 3 4 2 3 4)) '(#(1 2 3 4)) '(#(#(3 3 4)))))
