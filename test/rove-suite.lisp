@@ -2,49 +2,45 @@
 (in-package :lz77/test)
 
 ;;; TODO:
-;;;   * Add tests for encode and decode of messages in multiple parts.
+;;;   * Add tests for decoding of messages in multiple parts.
 ;;;   * Add encode and decode of random data, check we get the same thing after
 ;;;     an identity operation. Include tests with fragmented messages.
 ;;;   * Add test for maximum string length in encoder.
 ;;;   * Add more tests for edge cases, eg. very few inputs and no inputs.
 ;;;     * Encoding only zeroes.
-;;;   * Write test helpers to compacify tests a bit.
-;;;     * For decoder.
 ;;;   * Consider splitting test in multiple files.
+;;;   * Add tests for non-default arguments.
+
+(defun test-decoder (test-namestring literals-l triplets-l valid-decoded-l)
+  "Instantiate a new lz77-decoder and validate the decoded output against
+reference.
+test-namestring: Name for the test.
+literals-l: List of literals arrays to decode.
+triplets-l: List of triplets arrays to decode.
+valid-decode-l: The reference decoded symbols arrays."
+  (let ((lz77-decoder (make-lz77-decoder))
+        (decoded))
+    (testing (concatenate 'string test-namestring
+                          (format nil "~%~A~%~A" literals-l triplets-l))
+      (loop for i-part from 1
+            for literals in literals-l
+            for triplets in triplets-l
+            for valid-decoded in valid-decoded-l do
+              (setf decoded (decode lz77-decoder literals triplets))
+              (ok (equalp decoded valid-decoded)
+                  (format nil "Part #~A: decoded: ~A" i-part decoded))))))
 
 ;;; Decoder
 (deftest decoder
   ;; case 1
-  (let ((lz77-decoder)
-        (literals #(0 5 48 34 32 32 7))
-        (triplets #(#(3 4 1) #(4 1 7)))
-        (valid-decoded #(0 0 0 0 5 48 34 34 34 34 34 32 32 7))
-        (decoded))
-    (testing (format nil "case 1 ~A ~A" literals triplets)
-      (setf lz77-decoder (make-lz77-decoder))
-      (pass "LZ77 decoder instantiated.")
-      (setf decoded (decode lz77-decoder literals triplets))
-      (ok (equalp decoded valid-decoded) (format nil "decoded: ~A" decoded))))
+  (test-decoder "case 1" '(#(0 5 48 34 32 32 7)) '(#(#(3 4 1) #(4 1 7)))
+                '(#(0 0 0 0 5 48 34 34 34 34 34 32 32 7)))
   ;; Literals only.
-  (let ((lz77-decoder)
-        (literals #(0 5 48 34 32 32 7))
-        (triplets #())
-        (valid-decoded #(0 5 48 34 32 32 7))
-        (decoded))
-    (testing (format nil "literals only ~A ~A" literals triplets)
-      (setf lz77-decoder (make-lz77-decoder))
-      (setf decoded (decode lz77-decoder literals triplets))
-      (ok (equalp decoded valid-decoded) (format nil "decoded: ~A" decoded))))
+  (test-decoder "literals only" '(#(0 5 48 34 32 32 7)) '(#())
+                '(#(0 5 48 34 32 32 7)))
   ;; Compressed only.
-  (let ((lz77-decoder)
-        (literals #())
-        (triplets #(#(3 4 0) #(4 1 3)))
-        (valid-decoded #(0 0 0 0 0 0 0))
-        (decoded))
-    (testing (format nil "compressed only ~A ~A" literals triplets)
-      (setf lz77-decoder (make-lz77-decoder))
-      (setf decoded (decode lz77-decoder literals triplets))
-      (ok (equalp decoded valid-decoded) (format nil "decoded: ~A" decoded)))))
+  (test-decoder "triplets only" '(#()) '(#(#(3 4 0) #(4 1 3)))
+                '(#(0 0 0 0 0 0 0))))
 
 ;;; Encoder helper functions
 (defun test-encoder (test-namestring to-encode-l valid-literals-l
