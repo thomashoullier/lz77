@@ -7,7 +7,6 @@
 ;;;     an identity operation. Include tests with fragmented messages.
 ;;;   * Add test for maximum string length in encoder.
 ;;;   * Add more tests for edge cases, eg. very few inputs and no inputs.
-;;;   * Add a test for the bug where a triplet is at the very end of an array.
 
 ;;; Decoder
 (deftest decoder
@@ -101,3 +100,19 @@
                          (equalp triplets valid-triplets))
                     (format nil "Part #~A: literals: ~A triplets: ~A"
                             i-part literals triplets))))))
+
+;;; Fixed bugs.
+(deftest fixed-bugs
+  ;; bug-1: Encoding a triplet at the very end of the uncompressed data.
+  (let ((lz77-encoder (make-lz77-encoder))
+        (to-encode #(1 2 3 4 2 3 4))
+        (literals)
+        (valid-literals #(1 2 3 4))
+        (triplets)
+        (valid-triplets #(#(3 3 4))))
+    (testing (format nil "bug-1: End triplet ~A" to-encode)
+      (multiple-value-setq (literals triplets)
+        (values-list (encode lz77-encoder to-encode)))
+      (ok (and (equalp literals valid-literals)
+               (equalp triplets valid-triplets))
+          (format nil "literals: ~A triplets: ~A" literals triplets)))))
