@@ -1,5 +1,6 @@
 ;;;; Class definition for the LZ77 encoder.
 (in-package :lz77)
+;; TODO: * Simplify the counters mechanism for encoding in multiple parts.
 
 ;;; Parameters
 ;; Size of the `head` hash table.
@@ -59,8 +60,6 @@ Keeps track of the value of [p-global + min-string-len -1] at the
 beginning of the run. Should point to the beginning of next actual data
 to encode in the following run."
     :accessor p-global-begin-run :initarg :p-global-begin-run)))
-
-;; TODO: * Simplify the counters mechanism for encoding in multiple parts.
 
 (defun make-lz77-encoder (&key ((:window-size window-size) 32768)
                             ((:min-string-len min-string-len) 3)
