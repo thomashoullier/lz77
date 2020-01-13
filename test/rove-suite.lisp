@@ -37,7 +37,12 @@ valid-decode-l: The reference decoded symbols arrays."
                 '(#(0 5 48 34 32 32 7)))
   ;; Compressed only.
   (test-decoder "triplets only" '(#()) '(#(#(3 4 0) #(4 1 3)))
-                '(#(0 0 0 0 0 0 0))))
+                '(#(0 0 0 0 0 0 0)))
+  ;; Multiple parts.
+  (test-decoder "case 2: Multiple parts"
+                '(#(4 3 7) #(0 0 3 4 6) #(2 4))
+                '(#(#(4 1 0) #(2 2 6)) #() #(#(3 3 0)))
+                '(#(0 0 0 0 4 3 4 3 7) #(0 0 3 4 6) #(3 4 6 2 4))))
 
 ;;; Encoder helper functions
 (defun test-encoder (test-namestring to-encode-l valid-literals-l
