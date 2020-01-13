@@ -1,7 +1,5 @@
 ;;;; Class definition for the LZ77 decoder
 (in-package :lz77)
-;; TODO: * Add the ability to decode in multiple parts. Should be OK
-;;         already but test.
 
 (defclass lz77-decoder ()
   ((window-size

@@ -1,7 +1,6 @@
 ;;;; Rove test suite for lz77.
 (in-package :lz77/test)
 ;;; TODO:
-;;;   * Add tests for decoding of messages in multiple parts.
 ;;;   * Add encode and decode of random data, check we get the same thing after
 ;;;     an identity operation. Include tests with fragmented messages.
 ;;;   * Add test for maximum string length in encoder.
