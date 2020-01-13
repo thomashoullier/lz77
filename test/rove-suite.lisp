@@ -5,8 +5,6 @@
 ;;;   * Add encode and decode of random data, check we get the same thing after
 ;;;     an identity operation. Include tests with fragmented messages.
 ;;;   * Add test for maximum string length in encoder.
-;;;   * Add more tests for edge cases, eg. very few inputs and no inputs.
-;;;     * Encoding only zeroes.
 ;;;   * Consider splitting test in multiple files.
 ;;;   * Add tests for non-default arguments.
 
@@ -85,7 +83,11 @@ valid-triplets-l: List of arrays of triplets for validation."
                 '(#(0) #() #(2)) '(#(0) #() #(2)) '(#() #() #()))
   ;; Edge case 2: Begin with empty data:
   (test-encoder "edge-case 2: begin with empty data"
-                '(#() #() #(4)) '(#() #() #(4)) '(#() #() #())))
+                '(#() #() #(4)) '(#() #() #(4)) '(#() #() #()))
+  ;; Edge case 3: Only zeroes:
+  (test-encoder "edge-case 3: only zeroes"
+                '(#(0 0 0 0 0 0) #(0 0 0 0) #(0 0 0))
+                '(#() #() #()) '(#(#(6 1 0)) #(#(4 1 0)) #(#(3 1 0)))))
 
 ;;; Fixed bugs.
 (deftest fixed-bugs
