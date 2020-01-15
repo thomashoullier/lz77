@@ -2,46 +2,61 @@
 This is a Lempel-Ziv77 [1] compression encoder/decoder for use in a deflate
 encoder/decoder [2]. LZ77 is also called LZ1 [3].
 
+The system and package are called `lz77`.
+
+## Scope
+`lz77` is able to translate messages between an uncompressed representation
+(*eg.* `#(0 0 0 0 1 2 3 4 1 2 3 5 4)`) and an intermediate LZ77-compressed
+representation of the data in *literals* and *triplets* (*eg.*
+`#(1 2 3 4 5 4)` for literals and `#(#(4 1 0) #(3 4 8))` for literals). I
+refer to the triplets as *length-distance-position* triplets (see below).
+
+It is up to the user of `lz77` to make use of the intermediate LZ77-compressed
+message to write compressed data, in any way the user likes. Deflate [2]
+provides a way of encoding compressed data using the output of `lz77`.
+
+It is my intention to use the present package in deflate. Consequently,
+the choice of encoder implementation is chosen for the package
+to work well while remaining simple in a deflate implementation.
+
 ## Exported functions
 ### Encoder
 * **make-lz77-encoder** *&key* window-size min-string-len max-string-len =>
   lz77-encoder-instance
 
 Instantiate a lz77-encoder. With:
-* *window-size*: The size of the encoding sliding window (also called dictionary
-                 in [4]). The default is **32768** = 2^15, which is the value
-                 used in deflate [2].
+* *window-size*: The size of the encoding sliding window (also called
+  dictionary in [4]). The default is **32768** = 2^15, which is the value used
+  in deflate [2].
 * *min-string-len*: The minimum length of encoded strings. Repeating strings
-                    strictly below this length will be encoded as literals.
-                    The default is **3**, as in deflate.
+  strictly below this length will be encoded as literals.  The default is
+  **3**, as in deflate.
 * *max-string-len*: The maximum length of encoded strings. Repeatings strings
-                    strictly above this length will be encoded in multiple
-                    parts of length equal to or below *max-string-len*.
-                    The default is **258**, as in deflate.
+  strictly above this length will be encoded in multiple parts of length equal
+  to or below *max-string-len*.  The default is **258**, as in deflate.
 
 * **encode** lz77-encoder-instance uncompressed => (literals triplets)
 
 Encode a message using an instance of lz77-encoder. With:
 * *lz77-encoder-instance*: An instance of lz77-encoder.
-* *uncompressed*: A vector of fixnums representing the symbols of the message to
-                  encode.
+* *uncompressed*: A vector of fixnums representing the symbols of the message
+  to encode.
 * *literals*: Vector of fixnums that were encoded as literals.
 * *triplets*: A vector of triplets elements. Each triplet is a vector of three
-              elements, these elements being:
+  elements, these elements being:
   * length: The length of the matching string to repeat while decoding.
   * distance: The distance between the current decoding position and the
-    beginning of the matching string. A distance of 1 refers to the symbol
-    just before the current decoding position.
+    beginning of the matching string. A distance of 1 refers to the symbol just
+    before the current decoding position.
   * position: The position in the uncompressed message at which the string
-              recopy must intervene.
+    recopy must intervene.
 
 ### Decoder
 * **make-lz77-decoder** *&key* window-size => lz77-decoder-instance
 
 Instantiate a lz77-decoder. With:
 * *window-size*: The size of the sliding window keeping track of the decoded
-                 symbols preceding the current decoding position. Default is
-                 **32768**.
+  symbols preceding the current decoding position. Default is **32768**.
 
 * **decode** lz77-decoder-instance literals triplets => decoded
 
@@ -49,13 +64,13 @@ Decode a LZ77-encoded message. With:
 * *lz77-decoder-instance*: An instance of lz77-decoder.
 * *literals*: Vector of fixnums that were encoded as literals.
 * *triplets*: A vector of triplets elements. Each triplet is a vector of three
-              elements, these elements being:
+  elements, these elements being:
   * length: The length of the matching string to repeat while decoding.
   * distance: The distance between the current decoding position and the
-    beginning of the matching string. A distance of 1 refers to the symbol
-    just before the current decoding position.
+    beginning of the matching string. A distance of 1 refers to the symbol just
+    before the current decoding position.
   * position: The position in the uncompressed message at which the string
-              recopy must intervene.
+    recopy must intervene.
 * *decoded*: Vector of fixnums. The decoded message.
 
 ## Usage
@@ -236,9 +251,6 @@ matching strings are found, we choose the match with index closest to `p`.
 ## Caveats
 * Only the default parameters for the encoder were tested, those used in
   DEFLATE [2].
-* This library is not for compressing files per se. It outputs an intermediate
-  representation that can be used for compression. See [2] to see an example of
-  what can be done with this intermediate data.
 
 ## Test
 To launch tests:
