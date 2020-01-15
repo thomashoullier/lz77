@@ -5,6 +5,94 @@ encoder/decoder [2]. LZ77 is also called LZ1 [3].
 ## Exported functions
 
 ## Usage
+See the file [example.lisp](doc/example.lisp) for the following examples.
+Both encoder and decoder can take messages in multiple parts seamlessly for
+applications where memory footprint is critical.
+
+### Encoder
+#### One part
+We can encode a single message in the following way:
+
+```common-lisp
+;; Message to encode.
+(defparameter *to-encode* #(0 0 0 0 1 2 3 4 1 2 3 5 4))
+;; LZ77 encoder instance.
+(defparameter *lz77-encoder* (make-lz77-encoder))
+;; Resulting encoded literals and triplets.
+(defparameter *encoded* (encode *lz77-encoder* *to-encode*))
+;; => (list literals triplets)
+;;    * literals: #(1 2 3 4 5 4)
+;;    * triplets: #(#(4 1 0) #(3 4 8))
+```
+
+#### Multiple parts
+We can split our message in multiple parts and feed them sequentially
+to the encoder:
+
+```common-lisp
+(defparameter *to-encode-1* #(0 0 0))
+(defparameter *to-encode-2* #(0 1 2 3 4))
+(defparameter *to-encode-3* #(1 2 3 5 4))
+
+(defparameter *lz77-encoder* (make-lz77-encoder))
+
+;; Resulting encoded literals and triplets.
+(defparameter *encoded-1* (encode *lz77-encoder* *to-encode-1*))
+;; * literals: #() ; none
+;; * triplets: #(#(3 1 0))
+(defparameter *encoded-2* (encode *lz77-encoder* *to-encode-2*))
+;; * literals: #(0 1 2 3 4)
+;; * triplets: #() ; none
+(defparameter *encoded-3* (encode *lz77-encoder* *to-encode-3*))
+;; * literals: #(5 4)
+;; * triplets: #(#(3 4 0))
+```
+
+Please note that the concatenation of the three results is not equal to
+the result given by encoding the whole message in one encoding run.
+* The *position* in the *length-distance-position* triplet refers to an index
+  in the current sub-message rather than the index since the beginning of the
+  message.
+* We cannot encode triplets for strings that are not present in the current
+  sub-message. Here, the first four `0` in the message are thus encoded as
+  a triplet of length 3 and then a literal `0`.
+
+### Decoder
+#### One part
+An encoded message described by a pair of literals and triplets can be decoded
+in the following way:
+
+```common-lisp
+(defparameter *literals* #(1 2 3 4 5 4))
+(defparameter *triplets* #(#(4 1 0) #(3 4 8)))
+(defparameter *lz77-decoder* (make-lz77-decoder))
+(defparameter *decoded* (decode *lz77-decoder* *literals* *triplets*))
+;; => #(0 0 0 0 1 2 3 4 1 2 3 5 4)
+```
+
+#### Multiple parts
+An encoded message described by a sequence of pairs of literals and triplets can
+be decoded seamlessly:
+
+```common-lisp
+(defparameter *literals-1* #())
+(defparameter *triplets-1* #(#(3 1 0)))
+(defparameter *literals-2* #(0 1 2 3 4))
+(defparameter *triplets-2* #())
+(defparameter *literals-3* #(5 4))
+(defparameter *triplets-3* #(#(3 4 0)))
+
+(defparameter *lz77-decoder* (make-lz77-decoder))
+(defparameter *decoded-1* (decode *lz77-decoder* *literals-1* *triplets-1*))
+;; => #(0 0 0)
+(defparameter *decoded-2* (decode *lz77-decoder* *literals-2* *triplets-2*))
+;; => #(0 1 2 3 4)
+(defparameter *decoded-3* (decode *lz77-decoder* *literals-3* *triplets-3*))
+;; => #(1 2 3 5 4)
+```
+
+The concatenation of all the decoded messages in sequence gives us our original
+message.
 
 ## Encoder implementation
 We implemented the single-level hashing attributed to gzip in [4]. The algorithm
