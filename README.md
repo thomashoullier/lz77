@@ -8,7 +8,7 @@ The system and package are called `lz77`.
 `lz77` is able to translate messages between an uncompressed representation
 (*eg.* `#(0 0 0 0 1 2 3 4 1 2 3 5 4)`) and an intermediate LZ77-compressed
 representation of the data in *literals* and *triplets* (*eg.*
-`#(1 2 3 4 5 4)` for literals and `#(#(4 1 0) #(3 4 8))` for literals). I
+`#(1 2 3 4 5 4)` for literals and `#(#(4 1 0) #(3 4 8))` for triplets). I
 refer to the triplets as *length-distance-position* triplets (see below).
 
 It is up to the user of `lz77` to make use of the intermediate LZ77-compressed
